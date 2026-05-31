@@ -253,9 +253,12 @@ async function fetchPokemon() {
 
     // Фильтр по игре (game)
     if (state.filters.game !== 'all') {
-        whereClause.pokemon_v2_encounters = {
-            version_id: { _eq: parseInt(state.filters.game) }
-        };
+        const gameId = parseInt(state.filters.game);
+        whereClause._or = [
+            { pokemon_v2_encounters: { version_id: { _eq: gameId } } },
+            { pokemon_v2_pokemonspecy: { pokemon_v2_pokemonspeciesflavortexts: { version_id: { _eq: gameId } } } },
+            { pokemon_v2_pokemonmoves: { pokemon_v2_versiongroup: { pokemon_v2_versions: { id: { _eq: gameId } } } } }
+        ];
     }
 
     // Фильтр по статусу (редкости)
@@ -335,7 +338,7 @@ function renderPokemon(pokemonList) {
                 <img src="${imgUrl}" alt="Loading..." loading="lazy" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png'">
             </div>
             <div class="pokemon-id">#${String(poke.id).padStart(3, '0')}</div>
-            <div class="pokemon-name" id="name-${poke.id}">Загрузка...</div>
+            <div class="pokemon-name"><strong style="text-transform: capitalize;">${enName}</strong> <br/> <span id="name-${poke.id}">Загрузка...</span></div>
             <div class="pokemon-types">
                 ${types.map(t => `<span class="type-badge" style="background-color: ${typeColors[t] || '#777'}">${typeNamesRu[t] || t}</span>`).join('')}
             </div>
@@ -517,11 +520,14 @@ async function openModal(pokemonId, ruName) {
                     vName = enc.pokemon_v2_version.pokemon_v2_versionnames[0].name;
                 }
 
-                let lName = enc.pokemon_v2_locationarea.pokemon_v2_location.name;
-                if (enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames.length) {
-                    lName = enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames[0].name;
+                let lName = 'Неизвестная локация';
+                if (enc.pokemon_v2_locationarea && enc.pokemon_v2_locationarea.pokemon_v2_location) {
+                    lName = enc.pokemon_v2_locationarea.pokemon_v2_location.name;
+                    if (enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames.length) {
+                        lName = enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames[0].name;
+                    }
+                    lName = lName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                 }
-                lName = lName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
                 const method = enc.pokemon_v2_encounterslot && enc.pokemon_v2_encounterslot.pokemon_v2_encountermethod ? enc.pokemon_v2_encounterslot.pokemon_v2_encountermethod.name : "unknown";
                 const methodTranslated = methodDictRu[method] || method;
@@ -558,7 +564,8 @@ async function openModal(pokemonId, ruName) {
                 </div>
                 <div class="modal-title">
                     <div class="modal-id">#${String(poke.id).padStart(3, '0')}</div>
-                    <h2>${ruName}</h2>
+                    <h2 style="text-transform: capitalize;">${poke.name}</h2>
+                    <h3>${ruName}</h3>
                 </div>
             </div>
 
