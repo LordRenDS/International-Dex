@@ -1,0 +1,509 @@
+const GRAPHQL_URL = 'https://beta.pokeapi.co/graphql/v1beta';
+
+// Состояние приложения
+const state = {
+    offset: 0,
+    limit: 20,
+    loading: false,
+    hasMore: true,
+    filters: {
+        generation: 'all',
+        game: 'all',
+        status: 'all'
+    },
+    pokemonList: [],
+    versions: [] // Храним версии для фильтрации
+};
+
+// Функция для выполнения GraphQL запросов
+async function fetchGraphQL(query, variables = {}) {
+    try {
+        const response = await fetch(GRAPHQL_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ query, variables })
+        });
+
+        const json = await response.json();
+
+        if (json.errors) {
+            console.error('GraphQL Errors:', json.errors);
+            throw new Error('GraphQL Error');
+        }
+
+        return json.data;
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        return null;
+    }
+}
+
+// Запрос для получения списка поколений и игр для фильтров
+const fetchFiltersDataQuery = `
+query GetFilters {
+  generations: pokemon_v2_generation {
+    id
+    name
+  }
+  versions: pokemon_v2_version {
+    id
+    name
+    pokemon_v2_versionnames(where: {language_id: {_eq: 9}}) {
+      name
+    }
+    pokemon_v2_versiongroup {
+      pokemon_v2_generation {
+        id
+      }
+    }
+  }
+}
+`;
+
+// Имена поколений на русском (в API их может не быть)
+const genNamesRu = {
+    1: 'Поколение I',
+    2: 'Поколение II',
+    3: 'Поколение III',
+    4: 'Поколение IV',
+    5: 'Поколение V',
+    6: 'Поколение VI',
+    7: 'Поколение VII',
+    8: 'Поколение VIII',
+    9: 'Поколение IX'
+};
+
+// Загрузка начальных данных для фильтров
+async function loadFilters() {
+    const data = await fetchGraphQL(fetchFiltersDataQuery);
+    if (!data) return;
+
+    state.versions = data.versions;
+
+    const genSelect = document.getElementById('generation-filter');
+    const gameSelect = document.getElementById('game-filter');
+
+    // Заполнение поколений
+    data.generations.forEach(gen => {
+        const option = document.createElement('option');
+        option.value = gen.id;
+        option.textContent = genNamesRu[gen.id] || gen.name;
+        genSelect.appendChild(option);
+    });
+
+    // Заполнение игр
+    updateGameFilter('all');
+
+    // Слушатели событий
+    genSelect.addEventListener('change', (e) => {
+        state.filters.generation = e.target.value;
+        updateGameFilter(e.target.value);
+        resetAndFetchPokemon();
+    });
+
+    gameSelect.addEventListener('change', (e) => {
+        state.filters.game = e.target.value;
+        resetAndFetchPokemon();
+    });
+
+    document.getElementById('status-filter').addEventListener('change', (e) => {
+        state.filters.status = e.target.value;
+        resetAndFetchPokemon();
+    });
+}
+
+// Обновление списка игр в зависимости от выбранного поколения
+function updateGameFilter(generationId) {
+    const gameSelect = document.getElementById('game-filter');
+    // Сохраняем "Все игры"
+    gameSelect.innerHTML = '<option value="all">Все игры</option>';
+
+    let filteredVersions = state.versions;
+    if (generationId !== 'all') {
+        filteredVersions = state.versions.filter(v =>
+            v.pokemon_v2_versiongroup &&
+            v.pokemon_v2_versiongroup.pokemon_v2_generation &&
+            v.pokemon_v2_versiongroup.pokemon_v2_generation.id == generationId
+        );
+    }
+
+    filteredVersions.forEach(version => {
+        const option = document.createElement('option');
+        option.value = version.id;
+        let name = version.name;
+        if (version.pokemon_v2_versionnames && version.pokemon_v2_versionnames.length > 0) {
+            name = version.pokemon_v2_versionnames[0].name;
+        }
+        option.textContent = name;
+        gameSelect.appendChild(option);
+    });
+}
+
+function resetAndFetchPokemon() {
+    // Эта функция будет реализована в следующем шаге
+    console.log('Filters changed, fetching new data...', state.filters);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadFilters();
+});
+
+// Типы покемонов: цвета
+const typeColors = {
+    normal: '#A8A77A',
+    fire: '#EE8130',
+    water: '#6390F0',
+    electric: '#F7D02C',
+    grass: '#7AC74C',
+    ice: '#96D9D6',
+    fighting: '#C22E28',
+    poison: '#A33EA1',
+    ground: '#E2BF65',
+    flying: '#A98FF3',
+    psychic: '#F95587',
+    bug: '#A6B91A',
+    rock: '#B6A136',
+    ghost: '#735797',
+    dragon: '#6F35FC',
+    dark: '#705898',
+    steel: '#B7B7CE',
+    fairy: '#D685AD'
+};
+
+const typeNamesRu = {
+    normal: 'Обычный', fire: 'Огненный', water: 'Водяной', electric: 'Электрический',
+    grass: 'Травяной', ice: 'Ледяной', fighting: 'Боевой', poison: 'Ядовитый',
+    ground: 'Земляной', flying: 'Летающий', psychic: 'Психический', bug: 'Насекомое',
+    rock: 'Каменный', ghost: 'Призрачный', dragon: 'Драконий', dark: 'Тёмный',
+    steel: 'Стальной', fairy: 'Волшебный'
+};
+
+// Intersection Observer для бесконечного скролла
+let observer;
+
+function setupObserver() {
+    const options = {
+        root: null,
+        rootMargin: '0px',
+        threshold: 0.1
+    };
+
+    observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && !state.loading && state.hasMore) {
+                fetchPokemon();
+            }
+        });
+    }, options);
+
+    // Добавим триггер для обсервера в HTML
+    let trigger = document.getElementById('scroll-trigger');
+    if (!trigger) {
+        trigger = document.createElement('div');
+        trigger.id = 'scroll-trigger';
+        document.querySelector('.main-content').appendChild(trigger);
+    }
+    observer.observe(trigger);
+}
+
+// Запрос покемонов
+async function fetchPokemon() {
+    if (state.loading || !state.hasMore) return;
+
+    state.loading = true;
+    document.getElementById('loading').classList.remove('hidden');
+
+    let whereClause = {};
+
+    // Фильтр по поколению
+    if (state.filters.generation !== 'all') {
+        whereClause.pokemon_v2_pokemonspecy = {
+            ...whereClause.pokemon_v2_pokemonspecy,
+            generation_id: { _eq: parseInt(state.filters.generation) }
+        };
+    }
+
+    // Фильтр по игре (game)
+    if (state.filters.game !== 'all') {
+        whereClause.pokemon_v2_pokemonencounters = {
+            version_id: { _eq: parseInt(state.filters.game) }
+        };
+    }
+
+    // Фильтр по статусу (редкости)
+    if (state.filters.status !== 'all') {
+        whereClause.pokemon_v2_pokemonspecy = {
+            ...whereClause.pokemon_v2_pokemonspecy,
+            [state.filters.status]: { _eq: true }
+        };
+    }
+
+    // Преобразуем whereClause в строку для GraphQL
+    // Поскольку GraphQL ожидает объект без кавычек на ключах, мы передадим его через variables
+    const query = `
+    query GetPokemonList($limit: Int!, $offset: Int!, $where: pokemon_v2_pokemon_bool_exp) {
+      pokemon: pokemon_v2_pokemon(limit: $limit, offset: $offset, order_by: {id: asc}, where: $where) {
+        id
+        name
+        pokemon_v2_pokemonspecy {
+          pokemon_v2_pokemonspeciesnames(where: {language_id: {_eq: 7}}) {
+            name
+          }
+        }
+        pokemon_v2_pokemontypes {
+          pokemon_v2_type {
+            name
+          }
+        }
+      }
+    }
+    `;
+
+    try {
+        const data = await fetchGraphQL(query, {
+            limit: state.limit,
+            offset: state.offset,
+            where: whereClause
+        });
+
+        if (data && data.pokemon) {
+            if (data.pokemon.length < state.limit) {
+                state.hasMore = false;
+            }
+
+            renderPokemon(data.pokemon);
+            state.offset += state.limit;
+        }
+    } catch (error) {
+        console.error("Error fetching pokemon list:", error);
+    } finally {
+        state.loading = false;
+        document.getElementById('loading').classList.add('hidden');
+    }
+}
+
+// Отрисовка карточек
+function renderPokemon(pokemonList) {
+    const grid = document.getElementById('pokedex-grid');
+
+    pokemonList.forEach(poke => {
+        const card = document.createElement('div');
+        card.className = 'pokemon-card';
+        card.dataset.id = poke.id;
+
+        let ruName = poke.name;
+        if (poke.pokemon_v2_pokemonspecy &&
+            poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames &&
+            poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames.length > 0) {
+            ruName = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames[0].name;
+        }
+
+        const types = poke.pokemon_v2_pokemontypes.map(t => t.pokemon_v2_type.name);
+
+        const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${poke.id}.png`;
+
+        card.innerHTML = `
+            <div class="pokemon-image-container">
+                <img src="${imgUrl}" alt="${ruName}" loading="lazy" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png'">
+            </div>
+            <div class="pokemon-id">#${String(poke.id).padStart(3, '0')}</div>
+            <div class="pokemon-name">${ruName}</div>
+            <div class="pokemon-types">
+                ${types.map(t => `<span class="type-badge" style="background-color: ${typeColors[t] || '#777'}">${typeNamesRu[t] || t}</span>`).join('')}
+            </div>
+        `;
+
+        card.addEventListener('click', () => openModal(poke.id, ruName));
+        grid.appendChild(card);
+    });
+}
+
+// Обновленная функция сброса
+function resetAndFetchPokemon() {
+    state.offset = 0;
+    state.hasMore = true;
+    state.pokemonList = [];
+    document.getElementById('pokedex-grid').innerHTML = '';
+    fetchPokemon();
+}
+
+// Инициализация обсервера при старте
+document.addEventListener('DOMContentLoaded', () => {
+    // loadFilters() уже вызывается
+    setupObserver();
+});
+
+// Заглушка для модального окна (реализуем в след шаге)
+function openModal(id, name) {
+    console.log('Open modal for', id, name);
+}
+
+
+// Закрытие модального окна
+document.querySelector('.close-modal').addEventListener('click', () => {
+    document.getElementById('pokemon-modal').classList.add('hidden');
+});
+
+document.getElementById('pokemon-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'pokemon-modal') {
+        e.target.classList.add('hidden');
+    }
+});
+
+// Словари для локализации способов поимки
+const methodDictRu = {
+    'walk': 'В высокой траве',
+    'surf': 'Серфинг',
+    'old-rod': 'Старая удочка',
+    'good-rod': 'Хорошая удочка',
+    'super-rod': 'Супер удочка',
+    'gift': 'Подарок',
+    'rock-smash': 'Разбивание камней',
+    'headbutt': 'Удар головой'
+};
+
+async function openModal(pokemonId, ruName) {
+    const modal = document.getElementById('pokemon-modal');
+    const modalBody = modal.querySelector('.modal-body');
+
+    modal.classList.remove('hidden');
+    modalBody.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка данных...</p></div>';
+
+    let encounterWhereClause = { pokemon_id: { _eq: pokemonId } };
+    if (state.filters.game !== 'all') {
+        encounterWhereClause.version_id = { _eq: parseInt(state.filters.game) };
+    }
+
+    const query = `
+    query GetPokemonDetails($id: Int!, $encWhere: pokemon_v2_encounter_bool_exp) {
+      pokemon: pokemon_v2_pokemon_by_pk(id: $id) {
+        id
+        name
+        pokemon_v2_pokemonspecy {
+          pokemon_v2_pokemonspeciesflavortexts(where: {language_id: {_in: [7, 9]}}, limit: 2, order_by: {version_id: desc}) {
+            flavor_text
+            language_id
+          }
+        }
+      }
+      encounters: pokemon_v2_encounter(where: $encWhere) {
+        pokemon_v2_version {
+          name
+          pokemon_v2_versionnames(where: {language_id: {_eq: 9}}) { name }
+        }
+        pokemon_v2_locationarea {
+          pokemon_v2_location {
+            name
+            pokemon_v2_locationnames(where: {language_id: {_eq: 9}}) { name }
+          }
+        }
+        pokemon_v2_encounterslot {
+          pokemon_v2_encountermethod {
+            name
+          }
+        }
+        min_level
+        max_level
+      }
+    }
+    `;
+
+    try {
+        const data = await fetchGraphQL(query, {
+            id: pokemonId,
+            encWhere: encounterWhereClause
+        });
+
+        if (!data || !data.pokemon) throw new Error("Data not found");
+
+        const poke = data.pokemon;
+        const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${poke.id}.png`;
+
+        let flavorRu = 'Описание недоступно.';
+        let flavorEn = '';
+
+        if (poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesflavortexts) {
+            const texts = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesflavortexts;
+            const ru = texts.find(t => t.language_id === 7);
+            const en = texts.find(t => t.language_id === 9);
+
+            if (ru) flavorRu = ru.flavor_text.replace(/\f/g, ' ');
+            if (en) flavorEn = en.flavor_text.replace(/\f/g, ' ');
+            if (!ru && en) flavorRu = flavorEn;
+        }
+
+        // Группируем encounters по играм и локациям для компактности
+        let encounterHTML = '';
+        if (data.encounters && data.encounters.length > 0) {
+            const grouped = {};
+            data.encounters.forEach(enc => {
+                let vName = enc.pokemon_v2_version.name;
+                if (enc.pokemon_v2_version.pokemon_v2_versionnames.length) {
+                    vName = enc.pokemon_v2_version.pokemon_v2_versionnames[0].name;
+                }
+
+                let lName = enc.pokemon_v2_locationarea.pokemon_v2_location.name;
+                if (enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames.length) {
+                    lName = enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames[0].name;
+                }
+                lName = lName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+                const method = enc.pokemon_v2_encounterslot && enc.pokemon_v2_encounterslot.pokemon_v2_encountermethod ? enc.pokemon_v2_encounterslot.pokemon_v2_encountermethod.name : "unknown";
+                const methodTranslated = methodDictRu[method] || method;
+
+                const levels = enc.min_level === enc.max_level ? `Ур. ${enc.min_level}` : `Ур. ${enc.min_level}-${enc.max_level}`;
+
+                const key = `${vName}_${lName}`;
+                if (!grouped[key]) {
+                    grouped[key] = { game: vName, location: lName, methods: new Set() };
+                }
+                grouped[key].methods.add(`${methodTranslated} (${levels})`);
+            });
+
+            encounterHTML = `<ul class="encounters-list">` + Object.values(grouped).map(g => `
+                <li class="encounter-item">
+                    <div class="encounter-game">${g.game}</div>
+                    <div class="encounter-location">${g.location}</div>
+                    <div class="encounter-details">
+                        ${Array.from(g.methods).map(m => `<span>${m}</span>`).join('')}
+                    </div>
+                </li>
+            `).join('') + `</ul>`;
+        } else {
+            let msg = state.filters.game !== 'all'
+                ? 'Нет данных о поимке в выбранной игре.'
+                : 'Способ получения неизвестен (возможно эволюция, ивент или стартовик).';
+            encounterHTML = `<div class="no-data">${msg}</div>`;
+        }
+
+        modalBody.innerHTML = `
+            <div class="modal-header">
+                <div class="modal-image">
+                    <img src="${imgUrl}" alt="${ruName}" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png'">
+                </div>
+                <div class="modal-title">
+                    <div class="modal-id">#${String(poke.id).padStart(3, '0')}</div>
+                    <h2>${ruName}</h2>
+                </div>
+            </div>
+
+            <div class="modal-section">
+                <h3>Описание</h3>
+                <div class="modal-desc">${flavorRu}</div>
+                ${flavorEn && flavorRu !== flavorEn ? `<div class="modal-desc modal-desc-en">${flavorEn}</div>` : ''}
+            </div>
+
+            <div class="modal-section">
+                <h3>Где найти</h3>
+                ${encounterHTML}
+            </div>
+        `;
+
+    } catch (error) {
+        console.error("Modal Error:", error);
+        modalBody.innerHTML = '<div class="no-data">Произошла ошибка при загрузке данных.</div>';
+    }
+}
