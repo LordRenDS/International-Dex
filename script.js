@@ -173,6 +173,31 @@ const typeColors = {
     fairy: '#D685AD'
 };
 
+
+
+// --- Translation Functionality ---
+const translationCache = {};
+
+async function translateToRu(text) {
+    if (!text) return '';
+    if (translationCache[text]) {
+        return translationCache[text];
+    }
+
+    try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t&q=${encodeURIComponent(text)}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        const translatedText = data[0].map(item => item[0]).join('');
+        translationCache[text] = translatedText;
+        return translatedText;
+    } catch (error) {
+        console.error('Translation error:', error);
+        return text; // Fallback to original text if translation fails
+    }
+}
+// ---------------------------------
+
 const typeNamesRu = {
     normal: 'Обычный', fire: 'Огненный', water: 'Водяной', electric: 'Электрический',
     grass: 'Травяной', ice: 'Ледяной', fighting: 'Боевой', poison: 'Ядовитый',
@@ -228,7 +253,7 @@ async function fetchPokemon() {
 
     // Фильтр по игре (game)
     if (state.filters.game !== 'all') {
-        whereClause.pokemon_v2_pokemonencounters = {
+        whereClause.pokemon_v2_encounters = {
             version_id: { _eq: parseInt(state.filters.game) }
         };
     }
@@ -249,7 +274,7 @@ async function fetchPokemon() {
         id
         name
         pokemon_v2_pokemonspecy {
-          pokemon_v2_pokemonspeciesnames(where: {language_id: {_eq: 7}}) {
+          pokemon_v2_pokemonspeciesnames(where: {language_id: {_eq: 9}}) {
             name
           }
         }
@@ -289,35 +314,48 @@ async function fetchPokemon() {
 function renderPokemon(pokemonList) {
     const grid = document.getElementById('pokedex-grid');
 
-    pokemonList.forEach(poke => {
+    pokemonList.forEach(async poke => {
         const card = document.createElement('div');
         card.className = 'pokemon-card';
         card.dataset.id = poke.id;
 
-        let ruName = poke.name;
+        let enName = poke.name;
         if (poke.pokemon_v2_pokemonspecy &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames.length > 0) {
-            ruName = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames[0].name;
+            enName = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames[0].name;
         }
 
         const types = poke.pokemon_v2_pokemontypes.map(t => t.pokemon_v2_type.name);
-
         const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${poke.id}.png`;
 
+        // Create initial card structure with a placeholder for the name
         card.innerHTML = `
             <div class="pokemon-image-container">
-                <img src="${imgUrl}" alt="${ruName}" loading="lazy" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png'">
+                <img src="${imgUrl}" alt="Loading..." loading="lazy" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png'">
             </div>
             <div class="pokemon-id">#${String(poke.id).padStart(3, '0')}</div>
-            <div class="pokemon-name">${ruName}</div>
+            <div class="pokemon-name" id="name-${poke.id}">Загрузка...</div>
             <div class="pokemon-types">
                 ${types.map(t => `<span class="type-badge" style="background-color: ${typeColors[t] || '#777'}">${typeNamesRu[t] || t}</span>`).join('')}
             </div>
         `;
+        grid.appendChild(card);
+
+        // Translate name asynchronously
+        const ruName = await translateToRu(enName);
+
+        // Update DOM
+        const nameElement = card.querySelector(`#name-${poke.id}`);
+        if (nameElement) {
+            nameElement.textContent = ruName;
+        }
+        const imgElement = card.querySelector('img');
+        if (imgElement) {
+             imgElement.alt = ruName;
+        }
 
         card.addEventListener('click', () => openModal(poke.id, ruName));
-        grid.appendChild(card);
     });
 }
 
@@ -334,7 +372,41 @@ function resetAndFetchPokemon() {
 document.addEventListener('DOMContentLoaded', () => {
     // loadFilters() уже вызывается
     setupObserver();
+    initTheme();
 });
+
+// --- Theme Handling ---
+function initTheme() {
+    const themeSelect = document.getElementById('theme-filter');
+    const savedTheme = localStorage.getItem('theme') || 'system';
+
+    themeSelect.value = savedTheme;
+    applyTheme(savedTheme);
+
+    themeSelect.addEventListener('change', (e) => {
+        const theme = e.target.value;
+        localStorage.setItem('theme', theme);
+        applyTheme(theme);
+    });
+
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (localStorage.getItem('theme') === 'system') {
+            applyTheme('system');
+        }
+    });
+}
+
+function applyTheme(theme) {
+    if (theme === 'system') {
+        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    } else {
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+}
+// ----------------------
+
 
 // Заглушка для модального окна (реализуем в след шаге)
 function openModal(id, name) {
@@ -383,7 +455,7 @@ async function openModal(pokemonId, ruName) {
         id
         name
         pokemon_v2_pokemonspecy {
-          pokemon_v2_pokemonspeciesflavortexts(where: {language_id: {_in: [7, 9]}}, limit: 2, order_by: {version_id: desc}) {
+          pokemon_v2_pokemonspeciesflavortexts(where: {language_id: {_eq: 9}}, limit: 2, order_by: {version_id: desc}) {
             flavor_text
             language_id
           }
@@ -427,12 +499,12 @@ async function openModal(pokemonId, ruName) {
 
         if (poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesflavortexts) {
             const texts = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesflavortexts;
-            const ru = texts.find(t => t.language_id === 7);
             const en = texts.find(t => t.language_id === 9);
 
-            if (ru) flavorRu = ru.flavor_text.replace(/\f/g, ' ');
-            if (en) flavorEn = en.flavor_text.replace(/\f/g, ' ');
-            if (!ru && en) flavorRu = flavorEn;
+            if (en) {
+                flavorEn = en.flavor_text.replace(/[\f\n]/g, ' ');
+                flavorRu = await translateToRu(flavorEn);
+            }
         }
 
         // Группируем encounters по играм и локациям для компактности
@@ -474,7 +546,7 @@ async function openModal(pokemonId, ruName) {
             `).join('') + `</ul>`;
         } else {
             let msg = state.filters.game !== 'all'
-                ? 'Нет данных о поимке в выбранной игре.'
+                ? 'В выбранной игре этот покемон не встречается в дикой природе.'
                 : 'Способ получения неизвестен (возможно эволюция, ивент или стартовик).';
             encounterHTML = `<div class="no-data">${msg}</div>`;
         }
@@ -493,7 +565,7 @@ async function openModal(pokemonId, ruName) {
             <div class="modal-section">
                 <h3>Описание</h3>
                 <div class="modal-desc">${flavorRu}</div>
-                ${flavorEn && flavorRu !== flavorEn ? `<div class="modal-desc modal-desc-en">${flavorEn}</div>` : ''}
+                ${flavorEn ? `<div class="modal-desc modal-desc-en">${flavorEn}</div>` : ''}
             </div>
 
             <div class="modal-section">
