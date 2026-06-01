@@ -10,10 +10,8 @@
 <body>
     <header class="header">
         <h1>Покедекс</h1>
-        <button id="sidebar-toggle" class="sidebar-toggle">☰ Фильтры</button>
-        <div class="search-container">
-            <input type="text" id="search-input" placeholder="Поиск по имени...">
-        </div>
+        <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Фильтры">☰</button>
+
 
 
     </header>
@@ -25,6 +23,9 @@
                 <button id="close-sidebar" class="close-sidebar">&times;</button>
             </div>
 
+            <div class="search-container">
+            <input type="text" id="search-input" placeholder="Поиск по имени...">
+        </div>
             <div class="filters">
                 <div class="filter-group">
                     <label for="generation-filter">Поколение</label>
@@ -70,7 +71,7 @@
                 </select>
             </div>
 
-                <button id="reset-filters" class="sidebar-toggle" style="width: 100%; margin-top: 1rem; background-color: #ef4444; color: white; border-color: #dc2626;">Сбросить фильтры</button>
+                <button id="reset-filters" class="reset-filters-btn" style="width: 100%; margin-top: 1rem; background-color: #ef4444; color: white; border-color: #dc2626;">Сбросить фильтры</button>
         </div>
     </div>
 
