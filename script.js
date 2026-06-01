@@ -251,6 +251,7 @@ function setupObserver() {
 }
 
 // Запрос покемонов
+
 async function fetchPokemon() {
     if (state.loading || !state.hasMore) return;
 
@@ -286,9 +287,29 @@ async function fetchPokemon() {
     }
 
     let limit = state.limit;
+
     if (state.searchQuery) {
-        limit = 10000; // fetch all when searching so we can filter client-side
+        let searchStr = state.searchQuery;
+
+        // If cyrillic, translate query to English first to search via API
+        const isCyrillic = /[а-яА-ЯЁё]/.test(state.searchQuery);
+        if (isCyrillic) {
+            try {
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ru&tl=en&dt=t&q=${encodeURIComponent(state.searchQuery)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                searchStr = data[0].map(item => item[0]).join('').toLowerCase().trim();
+            } catch (e) {
+                console.error('Failed to translate search query', e);
+            }
+        }
+
+        whereClause.name = { _ilike: `%${searchStr}%` };
+        limit = 1000;
     }
+
+
+
 
     // Преобразуем whereClause в строку для GraphQL
     // Поскольку GraphQL ожидает объект без кавычек на ключах, мы передадим его через variables
@@ -351,15 +372,23 @@ async function renderPokemon(pokemonList) {
 
     let processedList = [];
 
-    for (const poke of pokemonList) {
+    // Pre-calculate English names
+    const items = pokemonList.map(poke => {
         let enName = poke.name;
         if (poke.pokemon_v2_pokemonspecy &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames.length > 0) {
             enName = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames[0].name;
         }
+        return { poke, enName };
+    });
 
-        const ruName = await translateToRu(enName);
+    // Translate concurrently
+    const translations = await Promise.all(items.map(item => translateToRu(item.enName)));
+
+    for (let i = 0; i < items.length; i++) {
+        const { poke, enName } = items[i];
+        const ruName = translations[i];
 
         if (state.searchQuery) {
             if (!enName.toLowerCase().includes(state.searchQuery) &&
