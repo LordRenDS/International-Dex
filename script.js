@@ -100,6 +100,7 @@ async function loadFilters() {
     // Слушатели событий
     genSelect.addEventListener('change', (e) => {
         state.filters.generation = e.target.value;
+        state.filters.game = 'all';
         updateGameFilter(e.target.value);
         resetAndFetchPokemon();
     });
@@ -130,15 +131,25 @@ function updateGameFilter(generationId) {
         );
     }
 
+    const seenNames = new Set();
+
     filteredVersions.forEach(version => {
-        const option = document.createElement('option');
-        option.value = version.id;
         let name = version.name;
         if (version.pokemon_v2_versionnames && version.pokemon_v2_versionnames.length > 0) {
             name = version.pokemon_v2_versionnames[0].name;
         }
-        option.textContent = name;
-        gameSelect.appendChild(option);
+
+        if (!name.startsWith('Pokémon ')) {
+            name = 'Pokémon ' + name;
+        }
+
+        if (!seenNames.has(name)) {
+            seenNames.add(name);
+            const option = document.createElement('option');
+            option.value = version.id;
+            option.textContent = name;
+            gameSelect.appendChild(option);
+        }
     });
 }
 
@@ -440,6 +451,70 @@ const methodDictRu = {
     'headbutt': 'Удар головой'
 };
 
+// --- Bulbapedia Integration ---
+async function fetchBulbapediaLocations(pokemonNameEn) {
+    const pageName = `${pokemonNameEn.charAt(0).toUpperCase() + pokemonNameEn.slice(1)}_(Pokémon)`;
+    const url = `https://bulbapedia.bulbagarden.net/w/api.php?action=parse&page=${pageName}&prop=text&format=json&origin=*`;
+    try {
+        const res = await fetch(url);
+        const json = await res.json();
+        if (!json.parse) return null;
+        const html = json.parse.text['*'];
+
+        const div = document.createElement('div');
+        div.innerHTML = html;
+
+        const headings = Array.from(div.querySelectorAll('h2, h3, h4'));
+        let locationsHeader = headings.find(h => h.textContent.includes('Game locations'));
+
+        if (!locationsHeader) return null;
+
+        let current = locationsHeader.nextElementSibling;
+        let locationsTable = null;
+        while (current && !current.matches('h2, h3, h4')) {
+            if (current.tagName === 'TABLE') {
+                locationsTable = current;
+                break;
+            }
+            current = current.nextElementSibling;
+        }
+
+        if (!locationsTable) return null;
+
+        const validRows = [];
+        const ths = Array.from(locationsTable.querySelectorAll('th'));
+        const processedTrs = new Set();
+
+        for (const th of ths) {
+            const tr = th.closest('tr');
+            if (!tr || processedTrs.has(tr)) continue;
+
+            const trThs = Array.from(tr.children).filter(el => el.tagName === 'TH');
+            const tds = Array.from(tr.children).filter(el => el.tagName === 'TD');
+
+            if (trThs.length > 0 && tds.length > 0) {
+                 processedTrs.add(tr);
+                 const games = trThs.map(t => t.textContent.trim().replace(/\n/g, ' ')).filter(g => g && !g.includes('Generation'));
+                 if (games.length > 0) {
+                     const locText = tds.map(td => {
+                         const clone = td.cloneNode(true);
+                         Array.from(clone.querySelectorAll('sup')).forEach(s => s.remove());
+                         return clone.textContent.trim().replace(/\n/g, ' ').replace(/\s{2,}/g, ' ');
+                     }).filter(t => t).join(' | ');
+
+                     if (locText && !locText.includes('Unobtainable')) {
+                         validRows.push({ games: games.join(', '), location: locText });
+                     }
+                 }
+            }
+        }
+        return validRows;
+    } catch(e) {
+        return null;
+    }
+}
+// ------------------------------
+
 async function openModal(pokemonId, ruName) {
     const modal = document.getElementById('pokemon-modal');
     const modalBody = modal.querySelector('.modal-body');
@@ -447,13 +522,8 @@ async function openModal(pokemonId, ruName) {
     modal.classList.remove('hidden');
     modalBody.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка данных...</p></div>';
 
-    let encounterWhereClause = { pokemon_id: { _eq: pokemonId } };
-    if (state.filters.game !== 'all') {
-        encounterWhereClause.version_id = { _eq: parseInt(state.filters.game) };
-    }
-
     const query = `
-    query GetPokemonDetails($id: Int!, $encWhere: pokemon_v2_encounter_bool_exp) {
+    query GetPokemonDetails($id: Int!) {
       pokemon: pokemon_v2_pokemon_by_pk(id: $id) {
         id
         name
@@ -464,32 +534,12 @@ async function openModal(pokemonId, ruName) {
           }
         }
       }
-      encounters: pokemon_v2_encounter(where: $encWhere) {
-        pokemon_v2_version {
-          name
-          pokemon_v2_versionnames(where: {language_id: {_eq: 9}}) { name }
-        }
-        pokemon_v2_locationarea {
-          pokemon_v2_location {
-            name
-            pokemon_v2_locationnames(where: {language_id: {_eq: 9}}) { name }
-          }
-        }
-        pokemon_v2_encounterslot {
-          pokemon_v2_encountermethod {
-            name
-          }
-        }
-        min_level
-        max_level
-      }
     }
     `;
 
     try {
         const data = await fetchGraphQL(query, {
-            id: pokemonId,
-            encWhere: encounterWhereClause
+            id: pokemonId
         });
 
         if (!data || !data.pokemon) throw new Error("Data not found");
@@ -510,51 +560,38 @@ async function openModal(pokemonId, ruName) {
             }
         }
 
-        // Группируем encounters по играм и локациям для компактности
+        // Получение локаций из Bulbapedia
         let encounterHTML = '';
-        if (data.encounters && data.encounters.length > 0) {
-            const grouped = {};
-            data.encounters.forEach(enc => {
-                let vName = enc.pokemon_v2_version.name;
-                if (enc.pokemon_v2_version.pokemon_v2_versionnames.length) {
-                    vName = enc.pokemon_v2_version.pokemon_v2_versionnames[0].name;
+        try {
+            const locations = await fetchBulbapediaLocations(poke.name);
+            if (locations && locations.length > 0) {
+                let targetGameName = null;
+                if (state.filters.game !== 'all') {
+                    const gameSelect = document.getElementById('game-filter');
+                    targetGameName = gameSelect.options[gameSelect.selectedIndex].text.replace('Pokémon ', '');
                 }
 
-                let lName = 'Неизвестная локация';
-                if (enc.pokemon_v2_locationarea && enc.pokemon_v2_locationarea.pokemon_v2_location) {
-                    lName = enc.pokemon_v2_locationarea.pokemon_v2_location.name;
-                    if (enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames.length) {
-                        lName = enc.pokemon_v2_locationarea.pokemon_v2_location.pokemon_v2_locationnames[0].name;
-                    }
-                    lName = lName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                let filteredLocations = locations;
+                if (targetGameName) {
+                    filteredLocations = locations.filter(loc => loc.games.includes(targetGameName));
                 }
 
-                const method = enc.pokemon_v2_encounterslot && enc.pokemon_v2_encounterslot.pokemon_v2_encountermethod ? enc.pokemon_v2_encounterslot.pokemon_v2_encountermethod.name : "unknown";
-                const methodTranslated = methodDictRu[method] || method;
-
-                const levels = enc.min_level === enc.max_level ? `Ур. ${enc.min_level}` : `Ур. ${enc.min_level}-${enc.max_level}`;
-
-                const key = `${vName}_${lName}`;
-                if (!grouped[key]) {
-                    grouped[key] = { game: vName, location: lName, methods: new Set() };
+                if (filteredLocations.length > 0) {
+                    encounterHTML = `<ul class="encounters-list">` + filteredLocations.map(g => `
+                        <li class="encounter-item">
+                            <div class="encounter-game">${g.games.split(', ').map(n => 'Pokémon ' + n).join(', ')}</div>
+                            <div class="encounter-location">${g.location}</div>
+                        </li>
+                    `).join('') + `</ul>`;
+                } else {
+                     encounterHTML = `<div class="no-data">${targetGameName ? 'В выбранной игре этот покемон не встречается в дикой природе или получается другим способом.' : 'Способ получения неизвестен.'}</div>`;
                 }
-                grouped[key].methods.add(`${methodTranslated} (${levels})`);
-            });
-
-            encounterHTML = `<ul class="encounters-list">` + Object.values(grouped).map(g => `
-                <li class="encounter-item">
-                    <div class="encounter-game">${g.game}</div>
-                    <div class="encounter-location">${g.location}</div>
-                    <div class="encounter-details">
-                        ${Array.from(g.methods).map(m => `<span>${m}</span>`).join('')}
-                    </div>
-                </li>
-            `).join('') + `</ul>`;
-        } else {
-            let msg = state.filters.game !== 'all'
-                ? 'В выбранной игре этот покемон не встречается в дикой природе.'
-                : 'Способ получения неизвестен (возможно эволюция, ивент или стартовик).';
-            encounterHTML = `<div class="no-data">${msg}</div>`;
+            } else {
+                encounterHTML = `<div class="no-data">Информация о местах обитания не найдена.</div>`;
+            }
+        } catch(e) {
+            console.error("Bulbapedia fetch error:", e);
+            encounterHTML = `<div class="no-data">Не удалось загрузить данные из Bulbapedia.</div>`;
         }
 
         modalBody.innerHTML = `
