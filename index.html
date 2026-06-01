@@ -10,30 +10,67 @@
 <body>
     <header class="header">
         <h1>Покедекс</h1>
-        <div class="filters">
-            <select id="generation-filter">
+        <button id="sidebar-toggle" class="sidebar-toggle">☰ Фильтры</button>
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Поиск по имени...">
+        </div>
+
+
+    </header>
+
+    <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+    <div id="filters-sidebar" class="filters-sidebar hidden">
+            <div class="sidebar-header">
+                <h2>Фильтры и сортировка</h2>
+                <button id="close-sidebar" class="close-sidebar">&times;</button>
+            </div>
+
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="generation-filter">Поколение</label>
+                    <select id="generation-filter">
                 <option value="all">Все поколения</option>
                 <!-- Опции добавятся через JS -->
             </select>
 
-            <select id="game-filter">
+                </div>
+                <div class="filter-group">
+                    <label for="game-filter">Игра</label>
+                    <select id="game-filter">
                 <option value="all">Все игры</option>
                 <!-- Опции добавятся через JS -->
             </select>
 
-            <select id="status-filter">
+                </div>
+                <div class="filter-group">
+                    <label for="status-filter">Статус</label>
+                    <select id="status-filter">
                 <option value="all">Любой статус</option>
                 <option value="is_legendary">Легендарные</option>
                 <option value="is_mythical">Мифические</option>
                 <option value="is_baby">Малыши</option>
             </select>
-            <select id="theme-filter">
-                <option value="system">Системная тема</option>
-                <option value="light">Светлая тема</option>
-                <option value="dark">Темная тема</option>
-            </select>
+                </div>
+                <div class="filter-group">
+                    <label for="sort-filter">Сортировка по</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select id="sort-filter" style="flex-grow: 1;">
+                            <option value="id">По номеру</option>
+                            <option value="name">По имени</option>
+                        </select>
+                        <button id="sort-order-btn" style="padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-color); color: var(--text-color); cursor: pointer;">⬆️</button>
+                    </div>
+                </div>
+                <div class="filter-group">
+                    <label for="theme-filter">Тема</label>
+                <select id="theme-filter">
+                    <option value="system">Системная тема</option>
+                    <option value="light">Светлая тема</option>
+                    <option value="dark">Темная тема</option>
+                </select>
+            </div>
         </div>
-    </header>
+    </div>
 
     <main class="main-content">
         <div id="pokedex-grid" class="grid">
@@ -55,6 +92,7 @@
         </div>
     </div>
 
+    <script src="custom_locations.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

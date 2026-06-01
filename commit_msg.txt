@@ -1,5 +1,6 @@
-Fix: Gen 9 filter, game list deduplication, and encounter source
+feat: Implement sidebar, search, sorting and custom locations
 
-- Reset the selected game filter to 'all' whenever the generation filter is changed, which resolves the bug causing the Generation 9 list to be empty due to an incompatible game filter being silently preserved.
-- Deduplicate game names in the game filter dropdown, addressing issues where some names (like "Red") appeared multiple times because of regional versions. Prepend all game names with "Pokémon ".
-- Integrate Bulbapedia's Parse API to fetch accurate and comprehensive "Game locations" data, fully replacing the incomplete PokéAPI encounter data in the modal. This fetches location tables directly, groups locations by games, and respects the currently selected game filter.
+- Added a hidden-by-default sidebar for filters, accessible via a toggle button.
+- Added live search by Pokemon name (English or Russian).
+- Added UI and logic to sort Pokemon by ID or Name, ascending or descending.
+- Included a custom_locations.js file for fallback location mappings, and improved UI text when locations are missing in both API and Bulbapedia.

@@ -11,6 +11,11 @@ const state = {
         game: 'all',
         status: 'all'
     },
+    sort: {
+        by: 'id',
+        order: 'asc'
+    },
+    searchQuery: '',
     pokemonList: [],
     versions: [] // Храним версии для фильтрации
 };
@@ -280,11 +285,27 @@ async function fetchPokemon() {
         };
     }
 
+    let limit = state.limit;
+    if (state.searchQuery) {
+        limit = 10000; // fetch all when searching so we can filter client-side
+    }
+
     // Преобразуем whereClause в строку для GraphQL
     // Поскольку GraphQL ожидает объект без кавычек на ключах, мы передадим его через variables
+    let order_by = '{id: asc}';
+    if (state.sort.by === 'id') {
+        order_by = state.sort.order === 'asc' ? '{id: asc}' : '{id: desc}';
+    } else if (state.sort.by === 'name') {
+        order_by = state.sort.order === 'asc' ? '{name: asc}' : '{name: desc}';
+    }
+
+    // GraphQL requires order_by to be unquoted in the query string,
+    // so we construct it dynamically but safely (values are strictly controlled)
+    // However, when sorting by name in API it sorts by EN name.
+    // For search we fetch limit=10000. If limit=10000, we should sort client side as well.
     const query = `
     query GetPokemonList($limit: Int!, $offset: Int!, $where: pokemon_v2_pokemon_bool_exp) {
-      pokemon: pokemon_v2_pokemon(limit: $limit, offset: $offset, order_by: {id: asc}, where: $where) {
+      pokemon: pokemon_v2_pokemon(limit: $limit, offset: $offset, order_by: ${order_by}, where: $where) {
         id
         name
         pokemon_v2_pokemonspecy {
@@ -303,7 +324,7 @@ async function fetchPokemon() {
 
     try {
         const data = await fetchGraphQL(query, {
-            limit: state.limit,
+            limit: limit,
             offset: state.offset,
             where: whereClause
         });
@@ -325,20 +346,58 @@ async function fetchPokemon() {
 }
 
 // Отрисовка карточек
-function renderPokemon(pokemonList) {
+async function renderPokemon(pokemonList) {
     const grid = document.getElementById('pokedex-grid');
 
-    pokemonList.forEach(async poke => {
-        const card = document.createElement('div');
-        card.className = 'pokemon-card';
-        card.dataset.id = poke.id;
+    let processedList = [];
 
+    for (const poke of pokemonList) {
         let enName = poke.name;
         if (poke.pokemon_v2_pokemonspecy &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames.length > 0) {
             enName = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames[0].name;
         }
+
+        const ruName = await translateToRu(enName);
+
+        if (state.searchQuery) {
+            if (!enName.toLowerCase().includes(state.searchQuery) &&
+                !ruName.toLowerCase().includes(state.searchQuery)) {
+                continue; // skip if doesn't match search
+            }
+        }
+
+        processedList.push({
+            ...poke,
+            _enName: enName,
+            _ruName: ruName
+        });
+    }
+
+    if (state.searchQuery || state.sort.by === 'name') {
+        processedList.sort((a, b) => {
+            if (state.sort.by === 'id') {
+                return state.sort.order === 'asc' ? a.id - b.id : b.id - a.id;
+            } else {
+                const nameA = a._ruName || a._enName;
+                const nameB = b._ruName || b._enName;
+                if (state.sort.order === 'asc') {
+                    return nameA.localeCompare(nameB, 'ru');
+                } else {
+                    return nameB.localeCompare(nameA, 'ru');
+                }
+            }
+        });
+    }
+
+    for (const poke of processedList) {
+        const enName = poke._enName;
+        const ruName = poke._ruName;
+
+        const card = document.createElement('div');
+        card.className = 'pokemon-card';
+        card.dataset.id = poke.id;
 
         const types = poke.pokemon_v2_pokemontypes.map(t => t.pokemon_v2_type.name);
         const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${poke.id}.png`;
@@ -357,7 +416,7 @@ function renderPokemon(pokemonList) {
         grid.appendChild(card);
 
         // Translate name asynchronously
-        const ruName = await translateToRu(enName);
+        // const ruName = await translateToRu(enName);
 
         // Update DOM
         const nameElement = card.querySelector(`#name-${poke.id}`);
@@ -370,7 +429,7 @@ function renderPokemon(pokemonList) {
         }
 
         card.addEventListener('click', () => openModal(poke.id, ruName));
-    });
+    }
 }
 
 // Обновленная функция сброса
@@ -387,7 +446,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // loadFilters() уже вызывается
     setupObserver();
     initTheme();
+    setupSidebar();
 });
+
+function setupSidebar() {
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.getElementById('filters-sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const closeSidebarBtn = document.getElementById('close-sidebar');
+
+    function openSidebar() {
+        sidebar.classList.remove('hidden');
+        backdrop.classList.remove('hidden');
+        document.body.classList.add('sidebar-open');
+    }
+
+    function closeSidebar() {
+        sidebar.classList.add('hidden');
+        backdrop.classList.add('hidden');
+        document.body.classList.remove('sidebar-open');
+    }
+
+    sidebarToggle.addEventListener('click', openSidebar);
+    closeSidebarBtn.addEventListener('click', closeSidebar);
+    backdrop.addEventListener('click', closeSidebar);
+}
+
 
 // --- Theme Handling ---
 function initTheme() {
@@ -560,11 +644,17 @@ async function openModal(pokemonId, ruName) {
             }
         }
 
-        // Получение локаций из Bulbapedia
+        // Получение локаций из Bulbapedia (и проверка локального файла)
         let encounterHTML = '';
         try {
-            const locations = await fetchBulbapediaLocations(poke.name);
-            if (locations && locations.length > 0) {
+            if (typeof customLocations !== 'undefined' && customLocations[poke.name]) {
+                encounterHTML = `<div class="encounter-details">
+                                    <div class="encounter-game">Особый способ получения / Альтернативная форма</div>
+                                    <div class="encounter-location">${customLocations[poke.name]}</div>
+                                 </div>`;
+            } else {
+                const locations = await fetchBulbapediaLocations(poke.name);
+                if (locations && locations.length > 0) {
                 let targetGameName = null;
                 if (state.filters.game !== 'all') {
                     const gameSelect = document.getElementById('game-filter');
@@ -584,10 +674,11 @@ async function openModal(pokemonId, ruName) {
                         </li>
                     `).join('') + `</ul>`;
                 } else {
-                     encounterHTML = `<div class="no-data">${targetGameName ? 'В выбранной игре этот покемон не встречается в дикой природе или получается другим способом.' : 'Способ получения неизвестен.'}</div>`;
+                     encounterHTML = `<div class="no-data">${targetGameName ? 'В выбранной игре этот покемон не встречается в дикой природе или получается другим способом (эволюция, обмен, ивент).' : 'Способ получения неизвестен (возможно, эволюция или обмен).'}</div>`;
                 }
             } else {
-                encounterHTML = `<div class="no-data">Информация о местах обитания не найдена.</div>`;
+                encounterHTML = `<div class="no-data">Информация о местах обитания не найдена. Возможно, покемон доступен только через эволюцию, обмен или специальные ивенты.</div>`;
+            }
             }
         } catch(e) {
             console.error("Bulbapedia fetch error:", e);
