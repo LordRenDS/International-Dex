@@ -447,30 +447,71 @@ document.addEventListener('DOMContentLoaded', () => {
     setupObserver();
     initTheme();
     setupSidebar();
+
+    // Search setup
+    const searchInput = document.getElementById('search-input');
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            state.searchQuery = e.target.value.trim().toLowerCase();
+            resetAndFetchPokemon();
+        }, 500);
+    });
+
 });
+
+
+function openSidebar() {
+    document.getElementById('filters-sidebar').classList.remove('hidden');
+    document.getElementById('sidebar-backdrop').classList.remove('hidden');
+    document.body.classList.add('sidebar-open');
+}
+
+function closeSidebar() {
+    document.getElementById('filters-sidebar').classList.add('hidden');
+    document.getElementById('sidebar-backdrop').classList.add('hidden');
+    document.body.classList.remove('sidebar-open');
+}
 
 function setupSidebar() {
     const sidebarToggle = document.getElementById('sidebar-toggle');
-    const sidebar = document.getElementById('filters-sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
     const closeSidebarBtn = document.getElementById('close-sidebar');
-
-    function openSidebar() {
-        sidebar.classList.remove('hidden');
-        backdrop.classList.remove('hidden');
-        document.body.classList.add('sidebar-open');
-    }
-
-    function closeSidebar() {
-        sidebar.classList.add('hidden');
-        backdrop.classList.add('hidden');
-        document.body.classList.remove('sidebar-open');
-    }
 
     sidebarToggle.addEventListener('click', openSidebar);
     closeSidebarBtn.addEventListener('click', closeSidebar);
     backdrop.addEventListener('click', closeSidebar);
 }
+
+
+    // Reset filters
+    const resetFiltersBtn = document.getElementById('reset-filters');
+    resetFiltersBtn.addEventListener('click', () => {
+        // Reset state
+        state.filters = {
+            generation: 'all',
+            game: 'all',
+            status: 'all'
+        };
+        state.sort = {
+            by: 'id',
+            order: 'asc'
+        };
+        state.searchQuery = '';
+
+        // Reset UI
+        document.getElementById('generation-filter').value = 'all';
+        document.getElementById('game-filter').value = 'all';
+        document.getElementById('status-filter').value = 'all';
+        document.getElementById('sort-filter').value = 'id';
+        document.getElementById('search-input').value = '';
+        document.getElementById('sort-order-btn').textContent = '⬆️';
+
+        resetAndFetchPokemon();
+        closeSidebar();
+    });
+
 
 
 // --- Theme Handling ---
@@ -515,11 +556,13 @@ function openModal(id, name) {
 // Закрытие модального окна
 document.querySelector('.close-modal').addEventListener('click', () => {
     document.getElementById('pokemon-modal').classList.add('hidden');
+    document.body.classList.remove('modal-open');
 });
 
 document.getElementById('pokemon-modal').addEventListener('click', (e) => {
     if (e.target.id === 'pokemon-modal') {
         e.target.classList.add('hidden');
+        document.body.classList.remove('modal-open');
     }
 });
 
@@ -604,6 +647,7 @@ async function openModal(pokemonId, ruName) {
     const modalBody = modal.querySelector('.modal-body');
 
     modal.classList.remove('hidden');
+    document.body.classList.add('modal-open');
     modalBody.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка данных...</p></div>';
 
     const query = `

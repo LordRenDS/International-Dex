@@ -311,3 +311,7 @@ select:focus { border-color: #3b82f6; }
         width: 100%;
     }
 }
+
+body.modal-open {
+    overflow: hidden;
+}
