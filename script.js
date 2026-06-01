@@ -349,28 +349,37 @@ async function fetchPokemon() {
 async function renderPokemon(pokemonList) {
     const grid = document.getElementById('pokedex-grid');
 
-    let processedList = [];
-
-    for (const poke of pokemonList) {
+    // Фильтрация и параллельный перевод
+    const namesToTranslate = pokemonList.map(poke => {
         let enName = poke.name;
         if (poke.pokemon_v2_pokemonspecy &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames &&
             poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames.length > 0) {
             enName = poke.pokemon_v2_pokemonspecy.pokemon_v2_pokemonspeciesnames[0].name;
         }
+        return { poke, enName };
+    });
 
-        const ruName = await translateToRu(enName);
+    // Делаем параллельный перевод всех имен
+    const translatedNames = await Promise.all(
+        namesToTranslate.map(item => translateToRu(item.enName))
+    );
+
+    let processedList = [];
+    for (let i = 0; i < namesToTranslate.length; i++) {
+        const item = namesToTranslate[i];
+        const ruName = translatedNames[i];
 
         if (state.searchQuery) {
-            if (!enName.toLowerCase().includes(state.searchQuery) &&
+            if (!item.enName.toLowerCase().includes(state.searchQuery) &&
                 !ruName.toLowerCase().includes(state.searchQuery)) {
                 continue; // skip if doesn't match search
             }
         }
 
         processedList.push({
-            ...poke,
-            _enName: enName,
+            ...item.poke,
+            _enName: item.enName,
             _ruName: ruName
         });
     }
@@ -451,13 +460,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // Search setup
     const searchInput = document.getElementById('search-input');
     let searchTimeout;
-    searchInput.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => {
-            state.searchQuery = e.target.value.trim().toLowerCase();
-            resetAndFetchPokemon();
-        }, 500);
-    });
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                state.searchQuery = e.target.value.trim().toLowerCase();
+                resetAndFetchPokemon();
+            }, 500);
+        });
+    } else {
+        console.error("Search input not found!");
+    }
 
 });
 
