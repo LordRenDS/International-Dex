@@ -1,6 +1,0 @@
-feat: Implement sidebar, search, sorting and custom locations
-
-- Added a hidden-by-default sidebar for filters, accessible via a toggle button.
-- Added live search by Pokemon name (English or Russian).
-- Added UI and logic to sort Pokemon by ID or Name, ascending or descending.
-- Included a custom_locations.js file for fallback location mappings, and improved UI text when locations are missing in both API and Bulbapedia.
