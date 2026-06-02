@@ -441,3 +441,27 @@
 .hidden {
     display: none !important;
 }
+
+/* Scrollbar styling */
+html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--id-color) var(--bg-color);
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--id-color);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-color);
+}
