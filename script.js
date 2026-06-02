@@ -330,12 +330,12 @@ async function fetchPokemon() {
         });
 
         if (data && data.pokemon) {
-            if (data.pokemon.length < state.limit) {
+            if (data.pokemon.length < limit) {
                 state.hasMore = false;
             }
 
             renderPokemon(data.pokemon);
-            state.offset += state.limit;
+            state.offset += limit;
         }
     } catch (error) {
         console.error("Error fetching pokemon list:", error);
@@ -360,15 +360,18 @@ async function renderPokemon(pokemonList) {
         return { poke, enName };
     });
 
-    // Делаем параллельный перевод всех имен
-    const translatedNames = await Promise.all(
-        namesToTranslate.map(item => translateToRu(item.enName))
-    );
-
     let processedList = [];
     for (let i = 0; i < namesToTranslate.length; i++) {
         const item = namesToTranslate[i];
-        const ruName = translatedNames[i];
+        let lookupName = item.enName.toLowerCase().replace(" ", "-").replace("'", "").replace(".", "").replace("♀", "-f").replace("♂", "-m").replace("é", "e");
+        let ruName = item.enName;
+        if (typeof pokemonRuNames !== 'undefined') {
+            if (pokemonRuNames[lookupName]) {
+                ruName = pokemonRuNames[lookupName];
+            } else if (pokemonRuNames[item.enName.toLowerCase()]) {
+                ruName = pokemonRuNames[item.enName.toLowerCase()];
+            }
+        }
 
         if (state.searchQuery) {
             if (!item.enName.toLowerCase().includes(state.searchQuery) &&
