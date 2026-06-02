@@ -51,14 +51,14 @@ function applyTheme(theme) {
     }
 }
 
-export async function renderPokemon(pokemonList) {
+export async function renderPokemon(pokemonList, isFirstPage) {
     const grid = document.getElementById('pokedex-grid');
 
-    if (state.offset === 0) {
+    if (isFirstPage) {
         grid.innerHTML = '';
     }
 
-    if (pokemonList.length === 0 && state.offset === 0) {
+    if (pokemonList.length === 0 && isFirstPage) {
         grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--id-color); padding: 2rem;">Ничего не найдено</div>';
         return;
     }
