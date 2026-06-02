@@ -19,7 +19,7 @@ function setupObserver() {
         });
     }, options);
 
-    const target = document.getElementById('loading');
+    const target = document.getElementById('sentinel');
     observer.observe(target);
 }
 
@@ -97,9 +97,9 @@ async function fetchPokemon() {
     let query;
     if (state.filters.game !== 'all') {
         variables.versionId = parseInt(state.filters.game);
-        query = getPokemonByGameQuery(hasSearch, hasFilter);
+        query = getPokemonByGameQuery(hasSearch, hasFilter, state.sort.by);
     } else {
-        query = getPokemonQuery(hasSearch, hasFilter);
+        query = getPokemonQuery(hasSearch, hasFilter, state.sort.by);
     }
 
     const data = await fetchGraphQL(query, variables);
@@ -109,24 +109,34 @@ async function fetchPokemon() {
             updateState({ hasMore: false });
         }
 
+        const isFirstPage = state.offset === 0;
         const newPokemonList = [...state.pokemonList, ...data.pokemon];
         updateState({
             pokemonList: newPokemonList,
             offset: state.offset + state.limit
         });
 
-        await renderPokemon(data.pokemon);
+        await renderPokemon(data.pokemon, isFirstPage);
     } else {
         updateState({ hasMore: false });
     }
 
     updateState({ loading: false });
     document.getElementById('loading').classList.add('loading--hidden');
+    if (!state.hasMore) {
+        const sentinel = document.getElementById('sentinel');
+        if (sentinel) sentinel.style.display = 'none';
+    } else {
+        const sentinel = document.getElementById('sentinel');
+        if (sentinel) sentinel.style.display = 'block';
+    }
 }
 
 // Reset and refetch
 function resetAndFetchPokemon() {
     resetPagination();
+    const sentinel = document.getElementById('sentinel');
+    if (sentinel) sentinel.style.display = 'block';
     fetchPokemon();
 }
 
@@ -201,6 +211,7 @@ async function init() {
     setupEventListeners();
     await loadFilters();
     updateGameFilter('all');
+    fetchPokemon();
     setupObserver();
 }
 

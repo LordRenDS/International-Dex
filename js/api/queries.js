@@ -12,13 +12,13 @@ export const fetchFiltersDataQuery = `
   }
 `;
 
-export const getPokemonQuery = (hasSearch, hasFilter) => `
+export const getPokemonQuery = (hasSearch, hasFilter, sortBy) => `
 query GetPokemon($limit: Int!, $offset: Int!, $search: String!, $generation: Int, $statusFilters: [pokemon_v2_pokemon_bool_exp!]!, $sortOrder: order_by!) {
   pokemon: pokemon_v2_pokemon(
     limit: $limit,
     offset: $offset,
     order_by: [
-      ${hasSearch ? '{id: asc}' : '{name: $sortOrder}, {id: $sortOrder}'}
+      ${hasSearch ? '{id: asc}' : sortBy === 'name' ? '{name: $sortOrder}, {id: $sortOrder}' : '{id: $sortOrder}'}
     ],
     where: {
       is_default: {_eq: true},
@@ -35,13 +35,13 @@ query GetPokemon($limit: Int!, $offset: Int!, $search: String!, $generation: Int
 }
 `;
 
-export const getPokemonByGameQuery = (hasSearch, hasFilter) => `
+export const getPokemonByGameQuery = (hasSearch, hasFilter, sortBy) => `
 query GetPokemonByGame($limit: Int!, $offset: Int!, $search: String!, $generation: Int, $statusFilters: [pokemon_v2_pokemon_bool_exp!]!, $sortOrder: order_by!, $versionId: Int!) {
   pokemon: pokemon_v2_pokemon(
     limit: $limit,
     offset: $offset,
     order_by: [
-      ${hasSearch ? '{id: asc}' : '{name: $sortOrder}, {id: $sortOrder}'}
+      ${hasSearch ? '{id: asc}' : sortBy === 'name' ? '{name: $sortOrder}, {id: $sortOrder}' : '{id: $sortOrder}'}
     ],
     where: {
       is_default: {_eq: true},
