@@ -1,0 +1,9 @@
+{
+  "name": "international-dex",
+  "version": "1.0.0",
+  "description": "Pokedex",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

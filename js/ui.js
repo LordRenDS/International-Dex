@@ -67,8 +67,8 @@ export async function renderPokemon(pokemonList, isFirstPage) {
 
     const translatedNames = await Promise.all(pokemonList.map(async (poke) => {
         let ruName = '';
-        if (typeof pokemonRuNames !== 'undefined' && pokemonRuNames[poke.id]) {
-            ruName = pokemonRuNames[poke.id];
+        if (typeof pokemonRuNames !== 'undefined' && pokemonRuNames[poke.name]) {
+            ruName = pokemonRuNames[poke.name];
         } else {
              ruName = await translateToRu(poke.name);
         }
@@ -80,7 +80,7 @@ export async function renderPokemon(pokemonList, isFirstPage) {
         card.className = 'card';
         card.dataset.id = poke.id;
 
-        const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png`;
+        const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${poke.id}.png`;
 
         card.innerHTML = `
             <div class="card__image-container">
@@ -127,6 +127,7 @@ export async function openModal(pokemonId, ruName) {
             }
         }
 
+
         let encounterHTML = '';
         try {
             if (typeof customLocations !== 'undefined' && customLocations[poke.name]) {
@@ -155,13 +156,39 @@ export async function openModal(pokemonId, ruName) {
                                 <div class="encounter-location">${g.location}</div>
                             </li>
                         `).join('') + `</ul>`;
-                    } else {
-                         encounterHTML = `<div class="no-data">${targetGameName ? 'В выбранной игре этот покемон не встречается в дикой природе или получается другим способом (эволюция, обмен, ивент).' : 'Способ получения неизвестен (возможно, эволюция или обмен).'}</div>`;
                     }
-                } else {
-                    encounterHTML = `<div class="no-data">Информация о местах обитания не найдена. Возможно, покемон доступен только через эволюцию, обмен или специальные ивенты.</div>`;
+                }
+
+                if (!encounterHTML) {
+                    const specy = poke.pokemon_v2_pokemonspecy;
+                    let fallbackMessage = 'Способ получения неизвестен.';
+
+                    if (specy) {
+                        if (specy.is_legendary || specy.is_mythical) {
+                            fallbackMessage = 'Легендарный или мифический покемон (получается в ходе сюжета или на специальных ивентах).';
+                        } else if (specy.is_baby) {
+                            fallbackMessage = 'Покемон-малыш (получается из яйца).';
+                        } else if (specy.evolves_from_species_id) {
+                            const preEvoId = specy.evolves_from_species_id;
+                            let preEvoName = 'предыдущей формы';
+                            if (specy.pokemon_v2_evolutionchain) {
+                                const preEvoObj = specy.pokemon_v2_evolutionchain.pokemon_v2_pokemonspecies.find(s => s.id === preEvoId);
+                                if (preEvoObj) {
+                                    preEvoName = (typeof pokemonRuNames !== 'undefined' && pokemonRuNames[preEvoObj.name])
+                                        ? pokemonRuNames[preEvoObj.name]
+                                        : (preEvoObj.name.charAt(0).toUpperCase() + preEvoObj.name.slice(1));
+                                }
+                            }
+                            fallbackMessage = `Эволюционирует из ${preEvoName}.`;
+                        } else {
+                             fallbackMessage = 'Возможно, стартовый покемон, ивентовый или доступен только через обмен.';
+                        }
+                    }
+
+                    encounterHTML = `<div class="no-data">${fallbackMessage}</div>`;
                 }
             }
+
         } catch(e) {
             console.error("Bulbapedia fetch error:", e);
             encounterHTML = `<div class="no-data">Не удалось загрузить данные из Bulbapedia.</div>`;

@@ -69,6 +69,16 @@ query GetPokemonDetails($id: Int!) {
     id
     name
     pokemon_v2_pokemonspecy {
+      is_legendary
+      is_mythical
+      is_baby
+      evolves_from_species_id
+      pokemon_v2_evolutionchain {
+        pokemon_v2_pokemonspecies {
+          id
+          name
+        }
+      }
       pokemon_v2_pokemonspeciesflavortexts(where: {language_id: {_eq: 9}}, limit: 2, order_by: {version_id: desc}) {
         flavor_text
         language_id

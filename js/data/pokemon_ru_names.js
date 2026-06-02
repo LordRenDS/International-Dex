@@ -1052,6 +1052,5 @@ const pokemonRuNames = {
     "iron-crown": "Железный Вождь",
     "iron crown": "Железный Вождь",
     "terapagos": "Терапагос",
-    "pecharunt": "Печарант",
-    "яйца": "Yaytsa"
+    "pecharunt": "Печарант"
 };
