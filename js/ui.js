@@ -82,6 +82,8 @@ export async function renderPokemon(pokemonList, isFirstPage) {
 
         const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${poke.id}.png`;
 
+        const typesHTML = poke.pokemon_v2_pokemontypes ? poke.pokemon_v2_pokemontypes.map(t => `<span class="type-badge type-${t.pokemon_v2_type.name}">${t.pokemon_v2_type.name}</span>`).join('') : '';
+
         card.innerHTML = `
             <div class="card__image-container">
                 <img class="card__image" src="${imgUrl}" alt="${poke.name}" loading="lazy" onerror="this.style.display='none'">
@@ -89,6 +91,7 @@ export async function renderPokemon(pokemonList, isFirstPage) {
             <div class="card__id">#${String(poke.id).padStart(3, '0')}</div>
             <div class="card__name">${poke.name}</div>
             <div class="card__ru-name">${poke.ruName}</div>
+            <div class="card__types">${typesHTML}</div>
         `;
 
         card.addEventListener('click', () => openModal(poke.id, poke.ruName));
