@@ -72,12 +72,32 @@ async function fetchPokemon() {
     updateState({ loading: true });
     document.getElementById('loading').classList.remove('loading--hidden');
 
-    const variables = {
+
+
+
+    let isCyrillic = /[а-яА-ЯЁё]/.test(state.searchQuery);
+
+    let variables = {
         limit: state.limit,
         offset: state.offset,
-        search: `%${state.searchQuery}%`,
         sortOrder: state.sort.order
     };
+
+    if (isCyrillic && typeof pokemonRuNames !== 'undefined') {
+        const foundKeys = Object.keys(pokemonRuNames).filter(key =>
+            pokemonRuNames[key].toLowerCase().includes(state.searchQuery.toLowerCase())
+        );
+
+        if (foundKeys.length > 0) {
+            variables.searchList = foundKeys;
+        } else {
+            // No match found in dictionary
+            variables.searchList = ["no_match_found_for_ru_search"];
+        }
+    } else {
+        variables.search = `%${state.searchQuery}%`;
+    }
+
 
     const hasSearch = state.searchQuery.length > 0;
     const hasFilter = state.filters.generation !== 'all';
@@ -97,9 +117,9 @@ async function fetchPokemon() {
     let query;
     if (state.filters.game !== 'all') {
         variables.versionId = parseInt(state.filters.game);
-        query = getPokemonByGameQuery(hasSearch, hasFilter, state.sort.by);
+        query = getPokemonByGameQuery(hasSearch, hasFilter, state.sort.by, isCyrillic);
     } else {
-        query = getPokemonQuery(hasSearch, hasFilter, state.sort.by);
+        query = getPokemonQuery(hasSearch, hasFilter, state.sort.by, isCyrillic);
     }
 
     const data = await fetchGraphQL(query, variables);
