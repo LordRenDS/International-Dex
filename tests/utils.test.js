@@ -22,3 +22,14 @@ test('debounce delays execution', async () => {
 
     assert.strictEqual(callCount, 1); // Called exactly once after wait
 });
+
+test('debounce passes arguments correctly', async () => {
+    let passedArgs = [];
+    const debounced = debounce((...args) => { passedArgs = args; }, 10);
+
+    debounced('arg1', 'arg2');
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    assert.deepStrictEqual(passedArgs, ['arg1', 'arg2']);
+});
