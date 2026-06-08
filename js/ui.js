@@ -66,15 +66,38 @@ export async function renderPokemon(pokemonList, isFirstPage) {
 
     const fragment = document.createDocumentFragment();
 
-    const translatedNames = await Promise.all(pokemonList.map(async (poke) => {
+    // 1. Identify which names need dynamic translation
+    const namesToTranslate = [];
+    const translationIndices = []; // Maps pokemonList index to namesToTranslate index
+
+    pokemonList.forEach((poke, index) => {
+        if (typeof pokemonRuNames === 'undefined' || !pokemonRuNames[poke.name]) {
+            namesToTranslate.push(poke.name);
+            translationIndices[index] = namesToTranslate.length - 1;
+        } else {
+            translationIndices[index] = -1; // -1 means it's in the dictionary
+        }
+    });
+
+    // 2. Batch translate missing names
+    let translatedBatch = [];
+    if (namesToTranslate.length > 0) {
+        const batchText = namesToTranslate.join('\n');
+        const resultText = await translateToRu(batchText);
+        translatedBatch = resultText.split('\n').map(s => s.trim());
+    }
+
+    // 3. Map translated names back to pokemon list
+    const translatedNames = pokemonList.map((poke, index) => {
         let ruName = '';
-        if (typeof pokemonRuNames !== 'undefined' && pokemonRuNames[poke.name]) {
+        if (translationIndices[index] === -1) {
             ruName = pokemonRuNames[poke.name];
         } else {
-             ruName = await translateToRu(poke.name);
+            const batchIndex = translationIndices[index];
+            ruName = translatedBatch[batchIndex] || poke.name; // Fallback to EN if translation array mismatch
         }
         return { ...poke, ruName };
-    }));
+    });
 
     translatedNames.forEach(poke => {
         const card = document.createElement('div');
