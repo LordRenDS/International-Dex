@@ -7,10 +7,10 @@ export async function fetchBulbapediaLocations(pokemonNameEn) {
         if (!json.parse) return null;
         const html = json.parse.text['*'];
 
-        const div = document.createElement('div');
-        div.innerHTML = html;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
 
-        const headings = Array.from(div.querySelectorAll('h2, h3, h4'));
+        const headings = Array.from(doc.querySelectorAll('h2, h3, h4'));
         let locationsHeader = headings.find(h => h.textContent.includes('Game locations'));
 
         if (!locationsHeader) return null;
