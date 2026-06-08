@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { fetchBulbapediaLocations } from '../js/api/bulbapedia.js';
 
 // Minimal DOM mock for bulbapedia parser
+global.DOMParser = class { parseFromString(html, mime) { return global.document.createElement("div"); } };
 global.document = {
     createElement: () => {
         return {
@@ -89,7 +90,8 @@ test('fetchBulbapediaLocations returns null on invalid JSON response', async () 
 
 test('fetchBulbapediaLocations handles no Game locations header', async () => {
     const originalDoc = global.document;
-    global.document = {
+    global.DOMParser = class { parseFromString(html, mime) { return global.document.createElement("div"); } };
+global.document = {
         createElement: () => ({
             innerHTML: '',
             querySelectorAll: () => []
