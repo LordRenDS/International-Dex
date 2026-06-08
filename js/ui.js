@@ -1,5 +1,6 @@
 import { state, updateState } from './state.js';
 import { fetchGraphQL, getPokemonDetailsQuery, translateToRu, fetchBulbapediaLocations } from './api/index.js';
+import { escapeHTML } from './utils.js';
 
 export function setupSidebar() {
     const sidebar = document.getElementById('filters-sidebar');
@@ -82,15 +83,15 @@ export async function renderPokemon(pokemonList, isFirstPage) {
 
         const imgUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${poke.id}.png`;
 
-        const typesHTML = poke.pokemon_v2_pokemontypes ? poke.pokemon_v2_pokemontypes.map(t => `<span class="type-badge type-${t.pokemon_v2_type.name}">${t.pokemon_v2_type.name}</span>`).join('') : '';
+        const typesHTML = poke.pokemon_v2_pokemontypes ? poke.pokemon_v2_pokemontypes.map(t => `<span class="type-badge type-${escapeHTML(t.pokemon_v2_type.name)}">${escapeHTML(t.pokemon_v2_type.name)}</span>`).join('') : '';
 
         card.innerHTML = `
             <div class="card__image-container">
-                <img class="card__image" src="${imgUrl}" alt="${poke.name}" loading="lazy" onerror="this.style.display='none'">
+                <img class="card__image" src="${escapeHTML(imgUrl)}" alt="${escapeHTML(poke.name)}" loading="lazy" onerror="this.style.display='none'">
             </div>
-            <div class="card__id">#${String(poke.id).padStart(3, '0')}</div>
-            <div class="card__name">${poke.name}</div>
-            <div class="card__ru-name">${poke.ruName}</div>
+            <div class="card__id">#${escapeHTML(String(poke.id).padStart(3, '0'))}</div>
+            <div class="card__name">${escapeHTML(poke.name)}</div>
+            <div class="card__ru-name">${escapeHTML(poke.ruName)}</div>
             <div class="card__types">${typesHTML}</div>
         `;
 
@@ -136,7 +137,7 @@ export async function openModal(pokemonId, ruName) {
             if (typeof customLocations !== 'undefined' && customLocations[poke.name]) {
                 encounterHTML = `<div class="encounter-details">
                                     <div class="encounter-game">Особый способ получения / Альтернативная форма</div>
-                                    <div class="encounter-location">${customLocations[poke.name]}</div>
+                                    <div class="encounter-location">${escapeHTML(customLocations[poke.name])}</div>
                                  </div>`;
             } else {
                 const locations = await fetchBulbapediaLocations(poke.name);
@@ -155,8 +156,8 @@ export async function openModal(pokemonId, ruName) {
                     if (filteredLocations.length > 0) {
                         encounterHTML = `<ul class="encounters-list">` + filteredLocations.map(g => `
                             <li class="encounter-item">
-                                <div class="encounter-game">${g.games.split(', ').map(n => 'Pokémon ' + n).join(', ')}</div>
-                                <div class="encounter-location">${g.location}</div>
+                                <div class="encounter-game">${escapeHTML(g.games.split(', ').map(n => 'Pokémon ' + n).join(', '))}</div>
+                                <div class="encounter-location">${escapeHTML(g.location)}</div>
                             </li>
                         `).join('') + `</ul>`;
                     }
@@ -188,7 +189,7 @@ export async function openModal(pokemonId, ruName) {
                         }
                     }
 
-                    encounterHTML = `<div class="no-data">${fallbackMessage}</div>`;
+                    encounterHTML = `<div class="no-data">${escapeHTML(fallbackMessage)}</div>`;
                 }
             }
 
@@ -200,19 +201,19 @@ export async function openModal(pokemonId, ruName) {
         modalBody.innerHTML = `
             <div class="modal__header">
                 <div class="modal__image-wrapper">
-                    <img class="modal__image" src="${imgUrl}" alt="${ruName}" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${poke.id}.png'">
+                    <img class="modal__image" src="${escapeHTML(imgUrl)}" alt="${escapeHTML(ruName)}" onerror="this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${escapeHTML(poke.id)}.png'">
                 </div>
                 <div class="modal__title-wrapper">
-                    <div class="modal__id">#${String(poke.id).padStart(3, '0')}</div>
-                    <h2 class="modal__name">${poke.name}</h2>
-                    <h3 class="modal__ru-name">${ruName}</h3>
+                    <div class="modal__id">#${escapeHTML(String(poke.id).padStart(3, '0'))}</div>
+                    <h2 class="modal__name">${escapeHTML(poke.name)}</h2>
+                    <h3 class="modal__ru-name">${escapeHTML(ruName)}</h3>
                 </div>
             </div>
 
             <div class="modal__section">
                 <h3>Описание</h3>
-                <div class="modal__desc">${flavorRu}</div>
-                ${flavorEn ? `<div class="modal__desc modal__desc--en">${flavorEn}</div>` : ''}
+                <div class="modal__desc">${escapeHTML(flavorRu)}</div>
+                ${flavorEn ? `<div class="modal__desc modal__desc--en">${escapeHTML(flavorEn)}</div>` : ''}
             </div>
 
             <div class="modal__section">
